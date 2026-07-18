@@ -48,7 +48,7 @@ if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
 SYMBOL = "XAU/USDT:USDT"                     # Mã sản phẩm Vàng trên OKX
 SYMBOL_ID = "XAU-USDT-SWAP"                 # ID giao dịch thực tế
 INTERVAL = "15m"                            # Khung thời gian quét chính
-PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "okx_paper_gold_portfolio.json")
+PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",  "okx_paper_gold_portfolio.json")
 
 # Tham số chiến thuật
 RISK_PERCENT = 2.0                          # Rủi ro 2% tài khoản mỗi lệnh
