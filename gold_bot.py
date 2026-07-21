@@ -48,7 +48,7 @@ if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
 SYMBOL = "XAU/USDT:USDT"                     # Mã sản phẩm Vàng trên OKX
 SYMBOL_ID = "XAU-USDT-SWAP"                 # ID giao dịch thực tế
 INTERVAL = "15m"                            # Khung thời gian quét chính
-PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",  "okx_paper_gold_portfolio.json")
+PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "okx_paper_gold_portfolio.json")
 
 # Tham số chiến thuật
 RISK_PERCENT = 2.0                          # Rủi ro 2% tài khoản mỗi lệnh
@@ -130,6 +130,44 @@ def calculate_vol_ma(volumes, length=20):
     for i in range(length - 1, len(volumes)):
         ma[i] = sum(volumes[i - length + 1 : i + 1]) / length
     return ma
+
+def calculate_adx(candles, length=14):
+    n = len(candles)
+    adx = [0.0] * n
+    if n <= length * 2: return adx
+    dm_plus = [0.0] * n
+    dm_minus = [0.0] * n
+    tr_list = [0.0] * n
+    for i in range(1, n):
+        high_diff = candles[i]["high"] - candles[i-1]["high"]
+        low_diff = candles[i-1]["low"] - candles[i]["low"]
+        dm_plus[i] = high_diff if high_diff > low_diff and high_diff > 0 else 0.0
+        dm_minus[i] = low_diff if low_diff > high_diff and low_diff > 0 else 0.0
+        tr_list[i] = max(candles[i]["high"] - candles[i]["low"], 
+                         abs(candles[i]["high"] - candles[i-1]["close"]), 
+                         abs(candles[i]["low"] - candles[i-1]["close"]))
+    sm_tr = sum(tr_list[1:length+1])
+    sm_dm_plus = sum(dm_plus[1:length+1])
+    sm_dm_minus = sum(dm_minus[1:length+1])
+    di_plus = [0.0] * n
+    di_minus = [0.0] * n
+    dx = [0.0] * n
+    for i in range(length, n):
+        if i > length:
+            sm_tr = sm_tr - sm_tr / length + tr_list[i]
+            sm_dm_plus = sm_dm_plus - sm_dm_plus / length + dm_plus[i]
+            sm_dm_minus = sm_dm_minus - sm_dm_minus / length + dm_minus[i]
+        if sm_tr > 0:
+            di_plus[i] = 100.0 * sm_dm_plus / sm_tr
+            di_minus[i] = 100.0 * sm_dm_minus / sm_tr
+            dsum = di_plus[i] + di_minus[i]
+            if dsum > 0:
+                dx[i] = 100.0 * abs(di_plus[i] - di_minus[i]) / dsum
+    start = length * 2
+    adx[start] = sum(dx[length:start]) / length
+    for i in range(start + 1, n):
+        adx[i] = (adx[i-1] * (length - 1) + dx[i]) / length
+    return adx
 
 # ==========================================================
 # KIỂM TRA BỘ LỌC CUỐI TUẦN (WEEKEND PAUSE)
@@ -308,15 +346,17 @@ async def scan_market():
         
         ema200 = calculate_ema(closes_all, 200)
         vol_ma = calculate_vol_ma(vols_all, 20)
+        adx = calculate_adx(c, 14)
+        adx_val = adx[idx]
         
         # Tính Kháng cự / Hỗ trợ trong 20 cây nến TRƯỚC nến hiện tại (từ idx-20 đến idx-1)
         window = c[idx-20:idx]
         res_level = max(x["high"] for x in window)
         sup_level = min(x["low"] for x in window)
         
-        # Kiểm tra điều kiện
-        is_long = close > res_level and close > ema200[idx] and volume > 1.5 * vol_ma[idx]
-        is_short = close < sup_level and close < ema200[idx] and volume > 1.5 * vol_ma[idx]
+        # Kiểm tra điều kiện (Thêm bộ lọc ADX >= 20.0 để loại bỏ sóng nhiễu)
+        is_long = close > res_level and close > ema200[idx] and volume > 1.5 * vol_ma[idx] and adx_val >= 20.0
+        is_short = close < sup_level and close < ema200[idx] and volume > 1.5 * vol_ma[idx] and adx_val >= 20.0
         
         if is_long:
             # LONG Entry
@@ -345,12 +385,13 @@ async def scan_market():
                 f"🟢 <b>[MÔ PHỎNG VÀNG - MỞ LỆNH] LONG {SYMBOL_ID} (15m)</b>\n\n"
                 f"🎟️ <b>Khối lượng:</b> {contracts} Contracts ({contracts * 0.001:.3f} oz)\n"
                 f"👉 <b>Giá vào lệnh:</b> {close:.1f}\n"
+                f"⚡ <b>Chỉ số ADX:</b> {adx_val:.2f} (>= 20.0)\n"
                 f"🛡️ <b>Stop Loss (0.3%):</b> {sl_price:.1f} (Rủi ro: -{risk_amount:.2f} USDT)\n"
                 f"🎯 <b>Take Profit (0.45%):</b> {tp_price:.1f} (Mục tiêu: +{risk_amount * 1.5:.2f} USDT)\n\n"
                 f"📊 <b>Số dư tài khoản:</b> {portfolio['balance']:.2f} USDT"
             )
             send_telegram_message(msg)
-            logger.info(f"🟢 Mở vị thế giả lập LONG XAUUSD: Entry {close:.1f} | SL {sl_price:.1f} | TP {tp_price:.1f}")
+            logger.info(f"🟢 Mở vị thế giả lập LONG XAUUSD: Entry {close:.1f} | SL {sl_price:.1f} | TP {tp_price:.1f} | ADX {adx_val:.2f}")
             
         elif is_short:
             # SHORT Entry
@@ -377,12 +418,13 @@ async def scan_market():
                 f"🔴 <b>[MÔ PHỎNG VÀNG - MỞ LỆNH] SHORT {SYMBOL_ID} (15m)</b>\n\n"
                 f"🎟️ <b>Khối lượng:</b> {contracts} Contracts ({contracts * 0.001:.3f} oz)\n"
                 f"👉 <b>Giá vào lệnh:</b> {close:.1f}\n"
+                f"⚡ <b>Chỉ số ADX:</b> {adx_val:.2f} (>= 20.0)\n"
                 f"🛡️ <b>Stop Loss (0.3%):</b> {sl_price:.1f} (Rủi ro: -{risk_amount:.2f} USDT)\n"
                 f"🎯 <b>Take Profit (0.45%):</b> {tp_price:.1f} (Mục tiêu: +{risk_amount * 1.5:.2f} USDT)\n\n"
                 f"📊 <b>Số dư tài khoản:</b> {portfolio['balance']:.2f} USDT"
             )
             send_telegram_message(msg)
-            logger.info(f"🔴 Mở vị thế giả lập SHORT XAUUSD: Entry {close:.1f} | SL {sl_price:.1f} | TP {tp_price:.1f}")
+            logger.info(f"🔴 Mở vị thế giả lập SHORT XAUUSD: Entry {close:.1f} | SL {sl_price:.1f} | TP {tp_price:.1f} | ADX {adx_val:.2f}")
             
     except Exception as e:
         logger.error(f"🔴 Lỗi trong chu kỳ quét thị trường Vàng: {e}")
@@ -424,7 +466,7 @@ async def main_loop():
     send_telegram_message(
         f"🚀 <b>BOT MÔ PHỎNG VÀNG OKX KHỞI CHẠY THÀNH CÔNG!</b>\n\n"
         f"📊 <b>Sản phẩm quét:</b> {SYMBOL_ID} (15m)\n"
-        f"📈 <b>Cấu hình chiến thuật:</b> S/R Breakout + Vol + EMA 200\n"
+        f"📈 <b>Cấu hình chiến thuật:</b> S/R Breakout + Vol + EMA 200 + ADX 20\n"
         f"🛡️ <b>Quản trị rủi ro:</b> SL 0.3% | TP 0.45% | Risk {RISK_PERCENT}%\n"
         f"💵 <b>Số dư khởi tạo:</b> {portfolio.get('balance', INITIAL_BALANCE):.2f} USDT"
     )
