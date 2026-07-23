@@ -86,7 +86,8 @@ def init_new_portfolio():
     portfolio = {
         "balance": INITIAL_BALANCE,
         "position": None,  # Hoặc dict chứa thông tin vị thế đang mở
-        "trades_history": []
+        "trades_history": [],
+        "last_signal_time": 0
     }
     save_portfolio()
     logger.info("🆕 Đã khởi tạo danh mục giả lập Vàng mới.")
@@ -325,6 +326,12 @@ async def scan_market():
         
         # Nến gần nhất đã đóng cửa (index -2)
         idx = len(c) - 2
+        candle_time = int(c[idx]["time"])
+        
+        # Bỏ qua nếu nến này đã phát tín hiệu trước đó
+        if candle_time <= portfolio.get("last_signal_time", 0):
+            return
+            
         close = c[idx]["close"]
         high = c[idx]["high"]
         low = c[idx]["low"]
@@ -379,6 +386,7 @@ async def scan_market():
                 "risk_amount": risk_amount,
                 "entry_time": int(time.time())
             }
+            portfolio["last_signal_time"] = candle_time
             save_portfolio()
             
             msg = (
@@ -412,6 +420,7 @@ async def scan_market():
                 "risk_amount": risk_amount,
                 "entry_time": int(time.time())
             }
+            portfolio["last_signal_time"] = candle_time
             save_portfolio()
             
             msg = (
