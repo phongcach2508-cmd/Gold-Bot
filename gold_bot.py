@@ -53,8 +53,8 @@ PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", 
 # Tham số chiến thuật
 RISK_PERCENT = 2.0                          # Rủi ro 2% tài khoản mỗi lệnh
 INITIAL_BALANCE = 100.0                     # Vốn khởi tạo
-SL_PCT = 0.003                              # Dừng lỗ 0.3%
-TP_PCT = 0.0045                             # Chốt lời 0.45% (R:R = 1.5)
+SL_PCT = 0.005                              # Dừng lỗ 0.5% (Tối ưu hóa tránh quét râu)
+TP_PCT = 0.010                              # Chốt lời 1.0% (R:R = 2.0, tối ưu lợi nhuận)
 
 portfolio = {}
 exchange = ccxt.okx({'enableRateLimit': True})
@@ -218,7 +218,7 @@ async def check_active_position(current_price, high_price, low_price):
         elif high_price >= tp:
             closed = True
             exit_price = tp
-            result_usdt = pos["risk_amount"] * 1.5
+            result_usdt = pos["risk_amount"] * (TP_PCT / SL_PCT)
             outcome = "CHỐT LỜI (TP)"
     else: # SHORT
         if high_price >= sl:
@@ -229,7 +229,7 @@ async def check_active_position(current_price, high_price, low_price):
         elif low_price <= tp:
             closed = True
             exit_price = tp
-            result_usdt = pos["risk_amount"] * 1.5
+            result_usdt = pos["risk_amount"] * (TP_PCT / SL_PCT)
             outcome = "CHỐT LỜI (TP)"
             
     if closed:
@@ -394,8 +394,8 @@ async def scan_market():
                 f"🎟️ <b>Khối lượng:</b> {contracts} Contracts ({contracts * 0.001:.3f} oz)\n"
                 f"👉 <b>Giá vào lệnh:</b> {close:.1f}\n"
                 f"⚡ <b>Chỉ số ADX:</b> {adx_val:.2f} (>= 20.0)\n"
-                f"🛡️ <b>Stop Loss (0.3%):</b> {sl_price:.1f} (Rủi ro: -{risk_amount:.2f} USDT)\n"
-                f"🎯 <b>Take Profit (0.45%):</b> {tp_price:.1f} (Mục tiêu: +{risk_amount * 1.5:.2f} USDT)\n\n"
+                f"🛡️ <b>Stop Loss ({SL_PCT*100:.2f}%):</b> {sl_price:.1f} (Rủi ro: -{risk_amount:.2f} USDT)\n"
+                f"🎯 <b>Take Profit ({TP_PCT*100:.2f}%):</b> {tp_price:.1f} (Mục tiêu: +{risk_amount * (TP_PCT / SL_PCT):.2f} USDT)\n\n"
                 f"📊 <b>Số dư tài khoản:</b> {portfolio['balance']:.2f} USDT"
             )
             send_telegram_message(msg)
@@ -428,8 +428,8 @@ async def scan_market():
                 f"🎟️ <b>Khối lượng:</b> {contracts} Contracts ({contracts * 0.001:.3f} oz)\n"
                 f"👉 <b>Giá vào lệnh:</b> {close:.1f}\n"
                 f"⚡ <b>Chỉ số ADX:</b> {adx_val:.2f} (>= 20.0)\n"
-                f"🛡️ <b>Stop Loss (0.3%):</b> {sl_price:.1f} (Rủi ro: -{risk_amount:.2f} USDT)\n"
-                f"🎯 <b>Take Profit (0.45%):</b> {tp_price:.1f} (Mục tiêu: +{risk_amount * 1.5:.2f} USDT)\n\n"
+                f"🛡️ <b>Stop Loss ({SL_PCT*100:.2f}%):</b> {sl_price:.1f} (Rủi ro: -{risk_amount:.2f} USDT)\n"
+                f"🎯 <b>Take Profit ({TP_PCT*100:.2f}%):</b> {tp_price:.1f} (Mục tiêu: +{risk_amount * (TP_PCT / SL_PCT):.2f} USDT)\n\n"
                 f"📊 <b>Số dư tài khoản:</b> {portfolio['balance']:.2f} USDT"
             )
             send_telegram_message(msg)
@@ -476,7 +476,7 @@ async def main_loop():
         f"🚀 <b>BOT MÔ PHỎNG VÀNG OKX KHỞI CHẠY THÀNH CÔNG!</b>\n\n"
         f"📊 <b>Sản phẩm quét:</b> {SYMBOL_ID} (15m)\n"
         f"📈 <b>Cấu hình chiến thuật:</b> S/R Breakout + Vol + EMA 200 + ADX 20\n"
-        f"🛡️ <b>Quản trị rủi ro:</b> SL 0.3% | TP 0.45% | Risk {RISK_PERCENT}%\n"
+        f"🛡️ <b>Quản trị rủi ro:</b> SL {SL_PCT*100:.2f}% | TP {TP_PCT*100:.2f}% | Risk {RISK_PERCENT}%\n"
         f"💵 <b>Số dư khởi tạo:</b> {portfolio.get('balance', INITIAL_BALANCE):.2f} USDT"
     )
     
