@@ -53,8 +53,8 @@ PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", 
 # Tham số chiến thuật
 RISK_PERCENT = 2.0                          # Rủi ro 2% tài khoản mỗi lệnh
 INITIAL_BALANCE = 100.0                     # Vốn khởi tạo
-SL_PCT = 0.005                              # Dừng lỗ 0.5% (Tối ưu hóa tránh quét râu)
-TP_PCT = 0.010                              # Chốt lời 1.0% (R:R = 2.0, tối ưu lợi nhuận)
+SL_PCT = 0.003                              # Dừng lỗ 0.3% theo tối ưu hóa backtest
+TP_PCT = 0.0045                             # Chốt lời 0.45% (R:R = 1.5)
 
 portfolio = {}
 exchange = ccxt.okx({'enableRateLimit': True})
@@ -361,9 +361,9 @@ async def scan_market():
         res_level = max(x["high"] for x in window)
         sup_level = min(x["low"] for x in window)
         
-        # Kiểm tra điều kiện (Thêm bộ lọc ADX >= 20.0 để loại bỏ sóng nhiễu)
-        is_long = close > res_level and close > ema200[idx] and volume > 1.5 * vol_ma[idx] and adx_val >= 20.0
-        is_short = close < sup_level and close < ema200[idx] and volume > 1.5 * vol_ma[idx] and adx_val >= 20.0
+        # Kiểm tra điều kiện (Chiến thuật S/R Breakout + Vol tối ưu hóa)
+        is_long = close > res_level and volume > 1.5 * vol_ma[idx]
+        is_short = close < sup_level and volume > 1.5 * vol_ma[idx]
         
         if is_long:
             # LONG Entry
