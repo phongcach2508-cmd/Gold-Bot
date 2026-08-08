@@ -49,11 +49,11 @@ SYMBOL_ID = "XAU-USDT-SWAP"                 # ID giao dịch thực tế
 INTERVAL = "15m"                            # Khung thời gian quét chính
 PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "okx_paper_gold_portfolio.json")
 
-# Tham số chiến thuật & Quản trị rủi ro
+# Tham số chiến thuật & Quản trị rủi ro (ĐÃ NÂNG CẤP V2 - DIỆT TẢO PHÍ SÀN)
 RISK_PERCENT = 2.0                          # Rủi ro 2% tài khoản mỗi lệnh
 INITIAL_BALANCE = 100.0                     # Vốn khởi tạo
-SL_PCT = 0.003                              # Dừng lỗ 0.3%
-TP_PCT = 0.0045                             # Chốt lời 0.45% (R:R = 1.5)
+SL_PCT = 0.006                              # Dừng lỗ 0.6% (Mở rộng để hạ số lượng HĐ & diệt tảo phí)
+TP_PCT = 0.012                              # Chốt lời 1.2% (R:R = 2.0R - Lãi gấp đôi lỗ)
 TAKER_FEE_RATE = 0.0005                     # Phí sàn OKX Taker 0.05% mỗi chiều
 
 portfolio = {}
@@ -352,8 +352,8 @@ async def scan_market():
         res_level = max(x["high"] for x in window)
         sup_level = min(x["low"] for x in window)
         
-        is_long = close > res_level and volume > 1.5 * vol_ma[idx]
-        is_short = close < sup_level and volume > 1.5 * vol_ma[idx]
+        is_long = close > res_level and volume > 1.5 * vol_ma[idx] and adx_val >= 25.0
+        is_short = close < sup_level and volume > 1.5 * vol_ma[idx] and adx_val >= 25.0
         
         contract_size = 0.001 # 1 contract = 0.001 oz
         
